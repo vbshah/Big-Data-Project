@@ -1,61 +1,52 @@
 # -*- coding: utf-8 -*-
 """
-Created on Thu Apr 19 18:06:12 2018
+Created on Sat Apr 21 18:35:51 2018
 
 @author: vbshah
 """
-
-from mysql import connector
 import pandas as pd
-import random
-from datetime import datetime
+from nltk.corpus import stopwords
+from nltk.tokenize import word_tokenize
+from sklearn.feature_extraction.text import TfidfVectorizer
+from nltk.stem import PorterStemmer
+from sklearn.naive_bayes import MultinomialNB
+from nltk.tokenize import sent_tokenize, word_tokenize
+import pickle
 
-def load_data(*file_names):
-    global data
-    data = pd.read_csv(file_names[0])   # get Complaint dataCSV file
-    location_data = pd.read_csv(file_names[1])
-    """
-    primary_data format: {table_name: {dbname: csv_name}}
-    """    
-    data["customer_name"] = ["John Doe"] * len(data)     # adding this for temporarily
-    data['Age Range'] = [random.randint(20, 80) 
-        for _ in range(len(data))]      # adding this for temporarily
-    data['Income Range'] = [random.randint(50000,100000) 
-        for _ in range(len(data))]
-    data['State'] = location_data['State']
-    data['Zipcode'] = pd.Series([str(i) for i in location_data['Zipcode']])
-    data['City'] = location_data['City']
-    data["Company ZIP"] = data['ZIP code']
-    return data
+"""
+Column names
+Date received	Product	Sub-product	Issue	Sub-issue	Consumer complaint narrative	Company public response	Company	State	ZIP code	Tags	Consumer consent provided?	Submitted via	Date sent to company	Company response to consumer	Timely response?	Consumer disputed?	Complaint ID
+"""
+# data = pd.read_csv('Consumer_Complaints (1).csv')
 
-configs = {
-    "host": "localhost",
-    "user": "root",
-    "password": "temp1234",
-    "database": "bigdataproject"
-}
-db = connector.connect(**configs)
-cursor = db.cursor()
-complaint_file = 'Consumer_Complaints.csv'
-location_file ='free-zipcode-database-Primary.csv'
-data = load_data(complaint_file, location_file)
-
-rec_date_dict = dict()
-sent_date_dict = dict()
-
-cntr = 0
+ps = PorterStemmer()
+def clean_data(s):
+    ls = word_tokenize(s)
+    unique_words = [ps.stem(i) for i in ls if i.isalpha()]
+    return ' '.join(list(set(unique_words)))        
+data = data
+print(len(data))
+# stop_words = set(stopwords.words('english'))
+f = open('stop_words.txt.txt')
+stop_words = [i.strip('\n') for i in f.readlines()]
+vectorizer = TfidfVectorizer(stop_words = stop_words, use_idf = True, max_features = 500)
+issues = ['Loan modification,collection,foreclosure', 'Incorrect information on credit report',
+          'Loan servicing, payments, escrow account', "Cont'd attempts collect debt not owed",
+          'Incorrect information on your report', 'Account opening, closing, or management',
+          'Disclosure verification of debt', 'Communication tactics', 'Deposits and withdrawals',
+          "Problem with a credit reporting company's investigation into an existing problem"
+          ]
+issues = set(issues)
+issue_dict = []
+complaint_nrrative = []
 for i in range(len(data)):
-    complaint_id = data['Complaint ID'][i]
-    recieved_date = data['Date received'][i]
-    sent_to_company = data['Date sent to company'][i]
-    recieved_date = "'" + datetime.strptime(recieved_date, '%m/%d/%Y').strftime('%Y-%m-%d') + "'"
-    sent_to_company = "'" + datetime.strptime(sent_to_company, '%m/%d/%Y').strftime('%Y-%m-%d') + "'"
-    update_query = 'update cfpb_complaint set date_received = ' + recieved_date + ', date_sent_to_company = ' + sent_to_company + ' where complaint_ID = '  + str(complaint_id)
-    cursor.execute(update_query)
-    if cntr % 100 == 0:
-        db.commit()
-    if cntr % 1000 == 0:
-        print("completed", cntr)
-    cntr += 1
-
-db.close()
+    if data['Issue'][i] in issues:
+        s = data['Consumer complaint narrative'][i]
+        if type(s) == str and len(s) > 0:
+            s = clean_data(s)
+            complaint_nrrative.append(s)
+            issue_dict.append(len(s))
+x = vectorizer.fit_transform(complaint_nrrative)
+with open('sparse_dense.pkl', 'wb') as f:
+    pickle.dump(x.todense(), f)
+print('data stored in sparse_dense.pkl')
