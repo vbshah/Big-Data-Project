@@ -9,8 +9,9 @@ from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 from sklearn.feature_extraction.text import TfidfVectorizer
 from nltk.stem import PorterStemmer
+from sklearn.naive_bayes import MultinomialNB
 from nltk.tokenize import sent_tokenize, word_tokenize
-
+import pickle
 
 """
 Column names
@@ -46,3 +47,6 @@ for i in range(len(data)):
             complaint_nrrative.append(s)
             issue_dict.append(len(s))
 x = vectorizer.fit_transform(complaint_nrrative)
+with open('sparse_dense.pkl', 'wb') as f:
+    pickle.dump(x.todense(), f)
+print('data stored in sparse_dense.pkl')
